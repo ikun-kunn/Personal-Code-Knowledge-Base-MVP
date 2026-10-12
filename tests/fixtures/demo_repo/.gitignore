@@ -1,0 +1,4 @@
+*.log
+secrets/
+build/
+!secrets/keep.py

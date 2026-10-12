@@ -1,0 +1,55 @@
+# CodeKB non-sensitive configuration.
+# Secrets (API keys) live in environment variables / `.env`; see `.env.example`.
+
+[index]
+include_extensions = [".py", ".md", ".toml", ".yaml", ".yml", ".json", ".txt"]
+max_file_size_kb = 500
+respect_gitignore = true
+# Directories that are pruned during the walk regardless of extension filters.
+exclude_dirs = [
+    ".git",
+    ".venv",
+    "venv",
+    "__pycache__",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".mypy_cache",
+    "node_modules",
+    "dist",
+    "build",
+    "data",
+    ".idea",
+    ".vscode",
+]
+
+[chunking]
+# A parsed unit larger than either limit is split further, with overlap.
+max_lines = 120
+max_chars = 4000
+overlap_lines = 10
+
+[retrieval]
+keyword_top_k = 20
+semantic_top_k = 20
+result_top_k = 10
+context_token_budget = 6000
+# Reciprocal Rank Fusion smoothing constant.
+rrf_k = 60
+
+[chat]
+provider = "openai_compatible"
+model_env = "CODEKB_CHAT_MODEL"
+base_url_env = "CODEKB_CHAT_BASE_URL"
+api_key_env = "CODEKB_CHAT_API_KEY"
+
+[embedding]
+provider = "ollama"
+model = "qwen3-embedding"
+base_url = "http://localhost:11434"
+
+# Data egress policy for retrieved source code.
+#   local_only        - never send code or queries to a remote model service
+#   cloud_allowed     - selected retrieved excerpts may be sent to a cloud model
+#   local_model_for_code - code/knowledge retrieval stays local, chat may be cloud
+[data_egress]
+policy = "local_only"

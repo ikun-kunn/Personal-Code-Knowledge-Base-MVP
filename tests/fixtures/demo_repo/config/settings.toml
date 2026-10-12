@@ -1,0 +1,8 @@
+name = "demo"
+
+[indexing]
+include_extensions = [".py", ".md"]
+max_retries = 3
+
+[providers.ollama]
+base_url = "http://localhost:11434"
