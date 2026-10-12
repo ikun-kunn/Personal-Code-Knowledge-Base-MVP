@@ -39,6 +39,47 @@ def test_scan_marks_knowledge_directory(demo_repo: Path, index_config) -> None:
     assert by_path["src/service.py"].source_type is SourceType.CODE
 
 
+def test_knowledge_dirs_match_at_any_depth(tmp_path: Path, index_config) -> None:
+    """A monorepo may keep knowledge entries beside each service, not only at the root."""
+    nested = tmp_path / "services" / "api" / "knowledge"
+    nested.mkdir(parents=True)
+    (nested / "k.md").write_text("# K\n\nbody\n", encoding="utf-8")
+    (tmp_path / "services" / "api" / "s.py").write_text("y = 2\n", encoding="utf-8")
+
+    by_path = {f.rel_path: f for f in scan(tmp_path, index_config).files}
+    assert by_path["services/api/knowledge/k.md"].source_type is SourceType.KNOWLEDGE
+    assert by_path["services/api/s.py"].source_type is SourceType.CODE
+
+
+def test_knowledge_dir_matching_does_not_match_partial_names(tmp_path: Path, index_config) -> None:
+    """`knowledge_base/` is not `knowledge/`: segment matching must be exact."""
+    (tmp_path / "knowledge_base").mkdir()
+    (tmp_path / "knowledge_base" / "n.md").write_text("# N\n\nbody\n", encoding="utf-8")
+    by_path = {f.rel_path: f for f in scan(tmp_path, index_config).files}
+    assert by_path["knowledge_base/n.md"].source_type is SourceType.DOC
+
+
+def test_symlinks_are_skipped(tmp_path: Path, index_config) -> None:
+    """A symlink must not pull content from outside the indexed tree.
+
+    os.walk(followlinks=False) only stops *directory* recursion; a file symlink
+    still reaches read_bytes(), which follows it. Creating one needs Windows
+    developer mode, so the test skips where that is unavailable.
+    """
+    outside = tmp_path.parent / f"outside_{tmp_path.name}"
+    outside.mkdir(exist_ok=True)
+    (outside / "secret.md").write_text("LEAKED_TOKEN_ABC123\n", encoding="utf-8")
+    (tmp_path / "real.md").write_text("# Real\n\nbody\n", encoding="utf-8")
+    try:
+        (tmp_path / "link.md").symlink_to(outside / "secret.md")
+    except (OSError, NotImplementedError):
+        pytest.skip("creating symlinks requires developer mode or elevated privileges")
+
+    paths = {f.rel_path for f in scan(tmp_path, index_config).files}
+    assert "real.md" in paths
+    assert "link.md" not in paths
+
+
 def test_scan_excludes_sensitive_files(demo_repo: Path, index_config) -> None:
     paths = {f.rel_path for f in scan(demo_repo, index_config).files}
     assert ".env" not in paths

@@ -21,6 +21,13 @@ exclude_dirs = [
     ".idea",
     ".vscode",
 ]
+# Files under a directory of any of these names are indexed as
+# source_type = "knowledge". Matched per path segment at any depth, so
+# `services/api/knowledge/` is recognised too. Exact names: `knowledge_base`
+# is not `knowledge`.
+knowledge_dirs = ["knowledge"]
+# Status applied to knowledge files that carry no `status:` frontmatter.
+knowledge_default_status = "draft"
 
 [chunking]
 # A parsed unit larger than either limit is split further, with overlap.

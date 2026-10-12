@@ -32,7 +32,8 @@ path and the read path must agree on it exactly.
 3. **Never execute indexed code.** The indexer reads, parses and hashes files.
    It does not import, eval, or shell out to anything inside a scanned repo.
 4. **Never index secrets.** Credential-shaped filenames are filtered *before*
-   the file is read.
+   the file is read, and file symlinks are skipped entirely so that indexing
+   `src/` cannot pull in content from outside the repository.
 5. **The term stream is derived data.** `chunks_fts.content` holds
    `index_terms(...)`, not raw text. Raw text lives in `chunks`. Any change to
    `tokenizer.py` therefore requires a full re-index to stay consistent.

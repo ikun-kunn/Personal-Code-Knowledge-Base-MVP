@@ -25,7 +25,12 @@ The cost is staleness, which is bounded by re-running `index`.
 | --- | --- | --- |
 | `code` | Source code | `.py` and other code extensions |
 | `doc` | Architecture docs, READMEs, config | `.md`, `.toml`, `.yaml`, `.json`, `.txt` |
-| `knowledge` | Reviewed experience entries | anything under a configured knowledge directory (`knowledge/` by default) |
+| `knowledge` | Reviewed experience entries | any file under a directory named in `index.knowledge_dirs` |
+
+`knowledge_dirs` holds **directory names**, matched against every segment of a
+path, not only against a repo-root prefix. A monorepo may therefore keep entries
+at `knowledge/` and at `services/api/knowledge/` and have both typed correctly.
+Matching is per-segment and exact, so `knowledge_base/` is not `knowledge/`.
 
 ## `chunks.status`
 
@@ -38,6 +43,17 @@ The cost is staleness, which is bounded by re-running `index`.
 `verified` on a code chunk means "this reflects the current implementation", not
 "a human reviewed this". Knowledge entries only reach `verified` through the
 review flow planned for milestone 6.
+
+## Multiple repositories
+
+`repositories` is keyed by `root_path`, and `files.repo_id` scopes every chunk.
+`SearchHit.repo_id` carries that attribution, and `KeywordSearchOptions.repo_id`
+restricts results to one repository.
+
+`repo_id = None` means *all repositories*, which is the default for the CLI
+because a first-time user has exactly one. Callers holding a multi-repo index
+should always set it — otherwise results silently span projects and a relative
+path becomes ambiguous.
 
 ## Incremental indexing
 

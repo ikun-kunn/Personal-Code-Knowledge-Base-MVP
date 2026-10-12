@@ -100,6 +100,9 @@ class SearchHit:
     status: ChunkStatus
     tags: tuple[str, ...]
     score: float
+    #: Which repository the chunk came from. Several repositories share one
+    #: index, so results are meaningless without it.
+    repo_id: int = 0
     #: Per-retriever provenance, e.g. ``{"keyword": 1.0, "semantic": 2.0}``.
     origins: dict[str, int] = field(default_factory=dict)
 

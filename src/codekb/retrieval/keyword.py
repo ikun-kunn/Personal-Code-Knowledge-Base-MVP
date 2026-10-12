@@ -39,6 +39,8 @@ class KeywordSearchOptions:
 
 
 def _matches_filters(hit: SearchHit, options: KeywordSearchOptions) -> bool:
+    if options.repo_id is not None and hit.repo_id != options.repo_id:
+        return False
     if options.source_types is not None and hit.source_type not in options.source_types:
         return False
     return not (options.statuses is not None and hit.status not in options.statuses)
@@ -98,6 +100,7 @@ def search_keyword(
                 status=hit.status,
                 tags=hit.tags,
                 score=score,
+                repo_id=hit.repo_id,
                 origins={"keyword": len(results) + 1},
             )
         )

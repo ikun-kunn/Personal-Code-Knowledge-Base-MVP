@@ -249,6 +249,48 @@ def test_search_against_empty_index(store: SqliteStore) -> None:
     assert search_keyword(store, "anything") == []
 
 
+def test_hits_carry_repo_id(indexed: SqliteStore, tmp_path: Path) -> None:
+    hits = search_keyword(indexed, "retry")
+    assert hits
+    assert all(hit.repo_id > 0 for hit in hits)
+
+
+def test_repo_id_filter_actually_restricts(indexed: SqliteStore, tmp_path: Path) -> None:
+    """Regression: the option existed but was never applied to hits."""
+    repo_id = indexed.upsert_repository(tmp_path / "demo", "demo")
+    scanned = ScannedFile(
+        abs_path=Path("other.py"),
+        rel_path="other.py",
+        kind=FileKind.PYTHON,
+        sha256="other",
+        size_bytes=10,
+    )
+    indexed.replace_file_chunks(
+        repo_id,
+        scanned,
+        [
+            Chunk(
+                source_type=SourceType.CODE,
+                content="def retry_other_repository(): pass",
+                start_line=1,
+                end_line=1,
+                title="retry_other_repository",
+            )
+        ],
+    )
+
+    everything = search_keyword(indexed, "retry", KeywordSearchOptions(limit=50))
+    mine = search_keyword(indexed, "retry", KeywordSearchOptions(limit=50, repo_id=repo_id))
+    assert len(mine) < len(everything)
+    assert all(hit.repo_id == repo_id for hit in mine)
+
+
+def test_repo_id_filter_isolates_completely(indexed: SqliteStore, tmp_path: Path) -> None:
+    """A repo_id that matches nothing must yield nothing, not everything."""
+    hits = search_keyword(indexed, "retry", KeywordSearchOptions(repo_id=999_999))
+    assert hits == []
+
+
 def test_hydrated_content_matches_line_range(indexed: SqliteStore, demo_repo: Path) -> None:
     """Every returned hit must be quotable verbatim from its source file."""
     hits = search_keyword(indexed, "exponential_backoff")

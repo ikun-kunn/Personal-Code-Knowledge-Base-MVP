@@ -89,6 +89,8 @@ These are deliberate, and each has a trigger for revisiting it.
 | Keyword-only retrieval | Paraphrased questions miss | Milestone 4 |
 | Fixed-size bigram CJK segmentation, no dictionary | Rare words split oddly; no stemming | Recall testing on real Chinese docs shows a miss |
 | `.gitignore` subset (no backslash escapes, no `core.excludesFile`) | A rare pattern may be skipped; skipped lines are never treated as matches | A user reports a missed ignore |
+| File symlinks are skipped, not followed | A symlinked source file inside the repo is not indexed | Only if a user reports a missing symlinked file |
+| No substring matching (`unicode61` does exact tokens) | An ALL-CAPS run like `UNIQTOKENALPHA` is not found by searching `UNIQTOKEN` | Only if identifiers must be matched by fragment |
 | Python and Markdown only | Other languages fall back to unparsed text once their extension is allowlisted | Milestone: Tree-sitter |
 | Whole-file rehash on every `index` | `O(bytes)` per run | Repos above ~100 MB |
 | Markdown sections are flat, so a parent's context is not co-located with its children | Long documents need two hops to read top-down | Retrieval testing shows parent context being missed |

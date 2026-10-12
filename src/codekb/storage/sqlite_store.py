@@ -94,6 +94,10 @@ class SyncResult:
     deleted_chunks: int
 
 
+class SqliteStoreError(RuntimeError):
+    """Raised when the database is in a state the caller did not expect."""
+
+
 class SqliteStore:
     """Thin, explicit data-access layer. No business logic, no model calls."""
 
@@ -162,7 +166,9 @@ class SqliteStore:
             row = conn.execute(
                 "SELECT id FROM repositories WHERE root_path = ?", (root,)
             ).fetchone()
-        assert row is not None
+        if row is None:  # pragma: no cover - the upsert above guarantees a row
+            msg = f"Failed to register repository: {root}"
+            raise SqliteStoreError(msg)
         return int(row["id"])
 
     def list_repositories(self) -> list[sqlite3.Row]:
@@ -214,7 +220,9 @@ class SqliteStore:
                 "SELECT id FROM files WHERE repo_id = ? AND path = ?",
                 (repo_id, file.rel_path),
             ).fetchone()
-            assert row is not None
+            if row is None:  # pragma: no cover - the upsert above guarantees a row
+                msg = f"Failed to resolve file row for {file.rel_path!r}"
+                raise SqliteStoreError(msg)
             file_id = int(row["id"])
 
             deleted = self._delete_chunks_for_file(conn, file_id)
@@ -320,7 +328,7 @@ class SqliteStore:
         rows = self._conn.execute(
             f"""
             SELECT c.id, c.source_type, c.title, c.symbol_name, c.start_line, c.end_line,
-                   c.content, c.status, c.tags_json, f.path
+                   c.content, c.status, c.tags_json, f.path, f.repo_id
             FROM chunks c JOIN files f ON f.id = c.file_id
             WHERE c.id IN ({placeholders})
             """,
@@ -344,6 +352,7 @@ class SqliteStore:
                 status=ChunkStatus(row["status"]),
                 tags=tags,
                 score=0.0,
+                repo_id=int(row["repo_id"]),
             )
         return hits
 

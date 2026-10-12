@@ -301,7 +301,15 @@ class ScanResult:
 
 
 def _source_type_for(rel_path: str, kind: FileKind, knowledge_dirs: tuple[str, ...]) -> SourceType:
-    if any(rel_path == d or rel_path.startswith(f"{d}/") for d in knowledge_dirs):
+    """Classify a file.
+
+    ``knowledge_dirs`` holds *directory names*, matched against every segment of
+    the path rather than only a prefix. A monorepo may keep knowledge entries at
+    ``knowledge/`` and also at ``services/api/knowledge/``; anchoring the match to
+    the repo root would silently downgrade the latter to ordinary docs.
+    """
+    segments = rel_path.split("/")[:-1]
+    if any(segment in knowledge_dirs for segment in segments):
         return SourceType.KNOWLEDGE
     return SourceType.DOC if kind in {FileKind.MARKDOWN, FileKind.TEXT} else SourceType.CODE
 
@@ -358,6 +366,16 @@ def scan(root: Path, config: IndexConfig) -> ScanResult:
             path = current / name
             rel_path = path.relative_to(root).as_posix()
 
+            # Symlinks are skipped unconditionally. os.walk(followlinks=False)
+            # stops *directory* recursion, but a file symlink is still handed
+            # to us, and read_bytes() would transparently read its target --
+            # which may live outside the repo entirely. Indexing `src/` must
+            # never pull in the contents of an unrelated file a symlink points
+            # at. Users who want a second tree indexed should register it as its
+            # own repository.
+            if path.is_symlink():
+                ignored += 1
+                continue
             if name.startswith(".") and not (rel_dir or "").startswith(".github"):
                 ignored += 1
                 continue
