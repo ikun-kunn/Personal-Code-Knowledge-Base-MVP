@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "personal-code-knowledge-base"
+version = "0.1.0"
+description = "Local, source-linked code knowledge retrieval for AI coding"
+requires-python = ">=3.10"
+
+[project.optional-dependencies]
+mcp = ["mcp>=1.12,<2"]
+
+[project.scripts]
+ckb = "ckb.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["ckb*"]

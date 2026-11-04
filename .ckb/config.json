@@ -1,0 +1,27 @@
+{
+  "extensions": [
+    ".py",
+    ".js",
+    ".jsx",
+    ".ts",
+    ".tsx",
+    ".go",
+    ".rs",
+    ".java",
+    ".md"
+  ],
+  "exclude": [
+    ".git",
+    ".venv",
+    "venv",
+    "node_modules",
+    "dist",
+    "build",
+    "coverage",
+    "__pycache__",
+    ".next"
+  ],
+  "max_file_bytes": 262144,
+  "chunk_lines": 80,
+  "overlap_lines": 10
+}
