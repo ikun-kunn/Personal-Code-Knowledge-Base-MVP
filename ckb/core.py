@@ -198,6 +198,7 @@ def index(root: Path) -> dict:
     connection = _connect(root)
     seen = set()
     changed = 0
+    warnings = []
     try:
         with connection:
             for path in files:
@@ -208,13 +209,19 @@ def index(root: Path) -> dict:
                 old = connection.execute("SELECT sha256 FROM files WHERE path = ?", (rel,)).fetchone()
                 if old and old[0] == digest:
                     continue
-                text = raw.decode("utf-8", errors="replace")
                 if rel.startswith(".ckb/knowledge/"):
-                    meta = parse_card(text, rel)
+                    try:
+                        text = raw.decode("utf-8")
+                        meta = parse_card(text, rel)
+                    except ValueError as exc:
+                        warning = f"{rel}: invalid UTF-8" if isinstance(exc, UnicodeDecodeError) else str(exc)
+                        warnings.append(warning)
+                        _delete_file(connection, rel)
+                        continue
                     records = [Entry(rel, meta["kind"], meta["status"], meta["title"], meta["summary"],
                                      meta["scope"], meta["body"], meta["start_line"], len(text.splitlines()))]
                 else:
-                    records = _chunks(text, rel, config)
+                    records = _chunks(raw.decode("utf-8", errors="replace"), rel, config)
                 _delete_file(connection, rel)
                 for entry in records:
                     cursor = connection.execute(
@@ -231,7 +238,8 @@ def index(root: Path) -> dict:
             for rel in stale:
                 _delete_file(connection, rel)
         return {"scanned": len(files), "changed": changed, "removed": len(stale),
-                "entries": connection.execute("SELECT count(*) FROM entries").fetchone()[0]}
+                "entries": connection.execute("SELECT count(*) FROM entries").fetchone()[0],
+                "warnings": warnings}
     finally:
         connection.close()
 
@@ -303,6 +311,48 @@ def search(root: Path, query: str, *, scope: str = "", kind: str = "", limit: in
         connection.close()
 
 
+def _context_section(entry: Entry, start: int, end: int, content: str) -> str:
+    return (f"## {entry.title} [{entry.kind}]\n"
+            f"Source: {entry.path}:{start}-{end}\n"
+            f"Status: {entry.status}\n"
+            f"Summary: {entry.summary}\n\n{content}\n\n")
+
+
+def _code_excerpt(entry: Entry, terms: list[str], budget: int) -> str:
+    lines = entry.content.split("\n")
+    hits = [i for i, line in enumerate(lines) if any(term in line.lower() for term in terms)]
+
+    def render(start: int, end: int) -> str:
+        body = "\n".join(lines[start:end + 1])
+        return _context_section(entry, entry.start_line + start, entry.start_line + end,
+                                body + "\n[truncated]")
+
+    # A match in the path or across lines may have no single matching line.
+    for anchor in hits or range(len(lines)):
+        section = render(anchor, anchor)
+        if len(section) <= budget:
+            break
+    else:
+        return ""
+
+    start = end = anchor
+    while start > 0 or end + 1 < len(lines):
+        previous = (start, end)
+        if start > 0:
+            candidate = render(start - 1, end)
+            if len(candidate) <= budget:
+                start -= 1
+                section = candidate
+        if end + 1 < len(lines):
+            candidate = render(start, end + 1)
+            if len(candidate) <= budget:
+                end += 1
+                section = candidate
+        if (start, end) == previous:
+            break
+    return section
+
+
 def context(root: Path, query: str, *, scope: str = "", budget: int = 6000, limit: int = 8) -> str:
     if budget < 200:
         raise ValueError("budget must be at least 200 characters")
@@ -311,7 +361,7 @@ def context(root: Path, query: str, *, scope: str = "", budget: int = 6000, limi
         rules = [Entry(r["path"], r["kind"], r["status"], r["title"], r["summary"], r["scope"],
                        r["content"], r["start_line"], r["end_line"])
                  for r in connection.execute("SELECT * FROM entries WHERE kind = 'rule' AND status = 'active'")
-                 if not scope or fnmatch.fnmatch(scope, r["scope"])]
+                 if (fnmatch.fnmatch(scope, r["scope"]) if scope else r["scope"] == "**")]
     finally:
         connection.close()
     terms = _terms(query)
@@ -323,7 +373,8 @@ def context(root: Path, query: str, *, scope: str = "", budget: int = 6000, limi
     rules = rules[:rule_cap]
     matches = [e for e in search(root, query, scope=scope, limit=limit * 3) if e.kind != "rule"]
     selected = rules + matches
-    heading = f"# Relevant project context\nTask: {query}\nScope: {scope or 'project'}\n\n"
+    scope_label = scope or "project (provide a target path for scoped rules)"
+    heading = f"# Relevant project context\nTask: {query}\nScope: {scope_label}\n\n"
     output = heading[:budget]
     rule_end = len(output) + int((budget - len(output)) * 0.45) if rules and matches else budget
     count = 0
@@ -331,15 +382,17 @@ def context(root: Path, query: str, *, scope: str = "", budget: int = 6000, limi
         if count >= limit:
             break
         cap = rule_end if entry.kind == "rule" and matches else budget
-        section = (f"## {entry.title} [{entry.kind}]\n"
-                   f"Source: {entry.path}:{entry.start_line}-{entry.end_line}\n"
-                   f"Status: {entry.status}\n"
-                   f"Summary: {entry.summary}\n\n{entry.content}\n\n")
+        section = _context_section(entry, entry.start_line, entry.end_line, entry.content)
         if len(output) + len(section) > cap:
             remaining = cap - len(output)
-            if remaining < 180:
+            if entry.kind == "code":
+                section = _code_excerpt(entry, terms or [query.lower()], remaining)
+            elif remaining >= 180:
+                section = section[:remaining - 18].rstrip() + "\n[truncated]\n\n"
+            else:
                 continue
-            section = section[:remaining - 18].rstrip() + "\n[truncated]\n\n"
+            if not section:
+                continue
         output += section
         count += 1
         if len(output) >= budget - 20:

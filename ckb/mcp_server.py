@@ -25,8 +25,16 @@ def create_server(root: Path, *, allow_drafts: bool = False) -> FastMCP:
             raise ValueError("Use a project-relative file path")
         if not task.strip() or not 500 <= budget <= 16000:
             raise ValueError("Provide a task and a budget between 500 and 16000 characters")
-        core.index(root)
-        return core.context(root, task, scope=scope, budget=budget)
+        warnings = core.index(root)["warnings"]
+        notice = ""
+        if warnings:
+            details = "\n".join(f"- {warning}" for warning in warnings)
+            notice = f"Index warnings ({len(warnings)} invalid cards skipped):\n{details}"
+            notice_budget = budget // 4
+            if len(notice) > notice_budget - 2:
+                notice = notice[:notice_budget - 5].rstrip() + "..."
+            notice += "\n\n"
+        return notice + core.context(root, task, scope=scope, budget=budget - len(notice))
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False))
     def find_examples(query: str, kind: str = "") -> list[dict]:

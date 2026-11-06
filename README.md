@@ -53,6 +53,7 @@ python -m pip install -e ".[mcp]"
 在助手里说「先用 `task_context` 为登录接口重试取上下文，目标文件是 `src/auth/login.py`」。有提示词菜单的客户端也可选择 `development_workflow`。
 
 - `task_context` 会在检索前增量刷新索引，按目标路径取规则并返回带行号的上下文。
+  格式错误的卡片会从索引中移除，工具会返回警告并继续检索。也可以运行 `ckb check` 查看完整错误。
 - `find_examples` 从现有索引查符号、架构决策或踩坑记录，只返回摘要和出处。需要先调用 `task_context` 或手动索引。
 - 若希望助手写回经验，在启动参数末尾加上 `--allow-drafts`。这会启用 `capture_draft`，要求提供来源或验证证据。审核草稿后手动改成 `active`，下次刷新即可检索。
 
@@ -73,7 +74,7 @@ python -m pip install -e ".[mcp]"
 - The index scans Git tracked and untracked, nonignored files when the directory is a Git repository. Else it scans the directory. It skips configured build and dependency directories, hidden directories, symbolic links, and files above 256 KiB.
 - Code and ordinary Markdown are split into overlapping, line-numbered chunks. Knowledge cards stay whole. SHA-256 makes reindexing incremental; deleted files are removed from the index.
 - SQLite FTS5 trigram search handles both English and Chinese substrings. Exact title, summary, and path matches increase relevance. A task path filters cards by scope. Active rule cards are included first in `context`.
-- `context` limits characters and entries, reserving room for search results when many rules apply. Every excerpt names its source and line range. The SQLite database stays local and is ignored by Git; cards and configuration can be versioned.
+- `context` limits characters and entries, reserving room for search results when many rules apply. Without a target path, it includes only global rules (`scope: **`). When a code excerpt must be shortened, it keeps matching lines where possible and cites the displayed range. The SQLite database stays local and is ignored by Git; cards and configuration can be versioned.
 
 `check` validates cards and configuration. It does not lint arbitrary project code; run the project's own formatters, linters, type checks, and tests for enforcement. For code structure rules across languages, an AST rule engine is a sensible follow-up.
 

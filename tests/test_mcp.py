@@ -16,9 +16,7 @@ class McpTests(unittest.IsolatedAsyncioTestCase):
         from mcp import ClientSession, StdioServerParameters
         from mcp.client.stdio import stdio_client
 
-        scratch = Path(__file__).resolve().parent / ".tmp"
-        scratch.mkdir(exist_ok=True)
-        with tempfile.TemporaryDirectory(dir=scratch) as directory:
+        with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             core.init(root)
             (root / "login.py").write_text("def retry_login(): pass\n", encoding="utf-8")
@@ -74,6 +72,16 @@ class McpTests(unittest.IsolatedAsyncioTestCase):
                     examples = await session.call_tool("find_examples", {"query": "retry_login", "kind": "code"})
                     self.assertFalse(examples.isError)
                     self.assertIn("login.py", str(examples.content))
+                    (root / ".ckb" / "knowledge" / "broken.md").write_text("broken", encoding="utf-8")
+                    (root / "logout.py").write_text("def retry_logout(): pass\n", encoding="utf-8")
+                    refreshed = await session.call_tool("task_context", {
+                        "task": "retry_logout", "path": "logout.py", "budget": 500,
+                    })
+                    self.assertFalse(refreshed.isError, str(refreshed.content))
+                    context = refreshed.content[0].text
+                    self.assertIn(".ckb/knowledge/broken.md: missing front matter", context)
+                    self.assertIn("def retry_logout(): pass", context)
+                    self.assertLessEqual(len(context), 500)
                     self.assertIn("development_workflow", {p.name for p in (await session.list_prompts()).prompts})
                     draft = await session.call_tool("capture_draft", {
                         "kind": "incident", "title": "登录重试", "summary": "Retry transient failures",
